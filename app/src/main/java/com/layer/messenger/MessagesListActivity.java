@@ -31,10 +31,14 @@ import com.layer.atlas.typingindicators.BubbleTypingIndicatorFactory;
 import com.layer.atlas.util.Util;
 import com.layer.atlas.util.views.SwipeableItem;
 import com.layer.sdk.LayerClient;
+import com.layer.sdk.changes.LayerChange;
+import com.layer.sdk.changes.LayerChangeEvent;
 import com.layer.sdk.exceptions.LayerConversationException;
+import com.layer.sdk.listeners.LayerChangeEventListener;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.ConversationOptions;
 import com.layer.sdk.messaging.Identity;
+import com.layer.sdk.messaging.LayerObject;
 import com.layer.sdk.messaging.Message;
 
 import java.util.HashSet;
@@ -49,6 +53,7 @@ public class MessagesListActivity extends BaseActivity {
     private AtlasMessagesRecyclerView mMessagesList;
     private AtlasTypingIndicator mTypingIndicator;
     private AtlasMessageComposer mMessageComposer;
+    private IdentityChangeListener mIdentityChangeListener;
 
     public MessagesListActivity() {
         super(R.layout.activity_messages_list, R.menu.menu_messages_list, R.string.title_select_conversation, true);
@@ -242,13 +247,25 @@ public class MessagesListActivity extends BaseActivity {
         PushNotificationReceiver.getNotifications(this).clear(mConversation);
         super.onResume();
         setTitle(mConversation != null);
+
+        // Register for identity changes and update the activity's title as needed
+        mIdentityChangeListener = new IdentityChangeListener();
+        getLayerClient().registerEventListener(mIdentityChangeListener);
     }
 
     @Override
     protected void onPause() {
         // Update the notification position to the latest seen
         PushNotificationReceiver.getNotifications(this).clear(mConversation);
+
+        getLayerClient().unregisterEventListener(mIdentityChangeListener);
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mMessagesList.onDestroy();
     }
 
     public void setTitle(boolean useConversation) {
@@ -319,5 +336,24 @@ public class MessagesListActivity extends BaseActivity {
         ADDRESS_COMPOSER,
         ADDRESS_CONVERSATION_COMPOSER,
         CONVERSATION_COMPOSER
+    }
+
+    private class IdentityChangeListener implements LayerChangeEventListener.Weak {
+        @Override
+        public void onChangeEvent(LayerChangeEvent layerChangeEvent) {
+            // Don't need to update title if there is no conversation
+            if (mConversation == null) {
+                return;
+            }
+
+            for (LayerChange change : layerChangeEvent.getChanges()) {
+                if (change.getObjectType().equals(LayerObject.Type.IDENTITY)) {
+                    Identity identity = (Identity) change.getObject();
+                    if (mConversation.getParticipants().contains(identity)) {
+                        setTitle(true);
+                    }
+                }
+            }
+        }
     }
 }
