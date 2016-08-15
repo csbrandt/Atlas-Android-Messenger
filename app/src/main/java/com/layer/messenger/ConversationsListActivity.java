@@ -30,7 +30,7 @@ public class ConversationsListActivity extends BaseActivity {
         final AtlasConversationsRecyclerView conversationsList = (AtlasConversationsRecyclerView) findViewById(R.id.conversations_list);
 
         // Atlas methods
-        conversationsList.init(getLayerClient(), getParticipantProvider(), getPicasso())
+        conversationsList.init(getLayerClient(), getPicasso())
                 .setInitialHistoricMessagesToFetch(20)
                 .setOnConversationClickListener(new AtlasConversationsAdapter.OnConversationClickListener() {
                     @Override

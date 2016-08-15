@@ -34,8 +34,10 @@ import com.layer.sdk.LayerClient;
 import com.layer.sdk.exceptions.LayerConversationException;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.ConversationOptions;
+import com.layer.sdk.messaging.Identity;
 import com.layer.sdk.messaging.Message;
 
+import java.util.HashSet;
 import java.util.List;
 
 public class MessagesListActivity extends BaseActivity {
@@ -95,7 +97,7 @@ public class MessagesListActivity extends BaseActivity {
         }
 
         mAddressBar = ((AtlasAddressBar) findViewById(R.id.conversation_launcher))
-                .init(getLayerClient(), getParticipantProvider(), getPicasso())
+                .init(getLayerClient(), getPicasso())
                 .setOnConversationClickListener(new AtlasAddressBar.OnConversationClickListener() {
                     @Override
                     public void onConversationClick(AtlasAddressBar addressBar, Conversation conversation) {
@@ -105,13 +107,13 @@ public class MessagesListActivity extends BaseActivity {
                 })
                 .setOnParticipantSelectionChangeListener(new AtlasAddressBar.OnParticipantSelectionChangeListener() {
                     @Override
-                    public void onParticipantSelectionChanged(AtlasAddressBar addressBar, final List<String> participantIds) {
-                        if (participantIds.isEmpty()) {
+                    public void onParticipantSelectionChanged(AtlasAddressBar addressBar, final List<Identity> participants) {
+                        if (participants.isEmpty()) {
                             setConversation(null, false);
                             return;
                         }
                         try {
-                            setConversation(getLayerClient().newConversation(new ConversationOptions().distinct(true), participantIds), false);
+                            setConversation(getLayerClient().newConversation(new ConversationOptions().distinct(true), new HashSet<>(participants)), false);
                         } catch (LayerConversationException e) {
                             setConversation(e.getConversation(), false);
                         }
@@ -152,7 +154,7 @@ public class MessagesListActivity extends BaseActivity {
                 .setHistoricMessagesPerFetch(20);
 
         mMessagesList = ((AtlasMessagesRecyclerView) findViewById(R.id.messages_list))
-                .init(getLayerClient(), getParticipantProvider(), getPicasso())
+                .init(getLayerClient(), getPicasso())
                 .addCellFactories(
                         new TextCellFactory(),
                         new ThreePartImageCellFactory(this, getLayerClient(), getPicasso()),
@@ -199,7 +201,7 @@ public class MessagesListActivity extends BaseActivity {
                 });
 
         mMessageComposer = ((AtlasMessageComposer) findViewById(R.id.message_composer))
-                .init(getLayerClient(), getParticipantProvider())
+                .init(getLayerClient())
                 .setTextSender(new TextSender())
                 .addAttachmentSenders(
                         new CameraSender(R.string.attachment_menu_camera, R.drawable.ic_photo_camera_white_24dp, this),
@@ -225,7 +227,7 @@ public class MessagesListActivity extends BaseActivity {
             } else if (intent.hasExtra("participantIds")) {
                 String[] participantIds = intent.getStringArrayExtra("participantIds");
                 try {
-                    conversation = getLayerClient().newConversation(new ConversationOptions().distinct(true), participantIds);
+                    conversation = getLayerClient().newConversationWithUserIds(new ConversationOptions().distinct(true), participantIds);
                 } catch (LayerConversationException e) {
                     conversation = e.getConversation();
                 }
@@ -253,7 +255,7 @@ public class MessagesListActivity extends BaseActivity {
         if (!useConversation) {
             setTitle(R.string.title_select_conversation);
         } else {
-            setTitle(Util.getConversationTitle(getLayerClient(), getParticipantProvider(), mConversation));
+            setTitle(Util.getConversationTitle(getLayerClient(), mConversation));
         }
     }
 
