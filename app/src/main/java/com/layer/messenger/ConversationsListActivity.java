@@ -91,7 +91,9 @@ public class ConversationsListActivity extends BaseActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        mConversationsList.onDestroy();
+        if (mConversationsList != null) {
+            mConversationsList.onDestroy();
+        }
     }
 
     @Override

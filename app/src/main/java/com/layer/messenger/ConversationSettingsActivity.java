@@ -22,6 +22,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.layer.atlas.AtlasAvatar;
+import com.layer.atlas.util.IdentityDisplayNameComparator;
 import com.layer.atlas.util.Util;
 import com.layer.sdk.LayerClient;
 import com.layer.sdk.changes.LayerChangeEvent;
@@ -33,7 +34,6 @@ import com.layer.sdk.policy.Policy;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -178,19 +178,7 @@ public class ConversationSettingsActivity extends BaseActivity implements LayerP
             Set<Identity> conversationParticipants = mConversation.getParticipants();
             conversationParticipants.remove(getLayerClient().getAuthenticatedUser());
             mParticipants.addAll(conversationParticipants);
-            Collections.sort(mParticipants, new Comparator<Identity>() {
-                @Override
-                public int compare(Identity lhs, Identity rhs) {
-                    if (lhs.getDisplayName() == null) {
-                        if (rhs.getDisplayName() == null) {
-                            return 0;
-                        } else {
-                            return -1;
-                        }
-                    }
-                    return lhs.getDisplayName().compareTo(rhs.getDisplayName());
-                }
-            });
+            Collections.sort(mParticipants, new IdentityDisplayNameComparator());
 
             // Adjust participant container height
             int height = Math.round(mParticipants.size() * getResources().getDimensionPixelSize(com.layer.atlas.R.dimen.atlas_secondary_item_height));
