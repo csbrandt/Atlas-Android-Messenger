@@ -2,6 +2,10 @@
 
 Atlas Messenger is a fully-featured messaging app following [Material Design guidelines](https://www.google.com/design/spec/material-design/introduction.html#introduction-goals), built on top of the [Layer SDK](https://layer.com/), using the [Atlas UI toolkit](https://github.com/layerhq/Atlas-Android).
 
+##<a name="setup"></a>Setup
+
+Run `git submodule update --init` to initialize and pull in the [Atlas-Android](https://github.com/layerhq/Atlas-Android) submodule.
+
 ##<a name="structure"></a>Structure
 
 * **App:** Application class.
@@ -21,7 +25,7 @@ Atlas Messenger uses the `AuthenticationProvider` interface to authenticate with
 ###<a name="buildvariants"></a>Provided Flavors
 Two default implementations are provided via [product flavors](http://developer.android.com/tools/building/configuring-gradle.html#workBuildVariants), where each flavor implements a custom `AuthenticationProvider`, a custom Atlas `Participant`, and provides login Activities for gathering their required credentials:  
 
-1. **atlasprovider:** For use in the [Layer Atlas demo](https://getatlas.layer.com/android).  This authentication flow utilizes a QR-Code scanner to capture a Layer App ID from the Layer developer dashboard.  The scanner can be bypassed by supplying your Atlas demo App ID in the `App.LAYER_APP_ID` constant. 
+1. **atlasprovider:** For use in the [Layer Atlas demo](https://getatlas.layer.com/android).  This authentication flow utilizes a QR-Code scanner to capture a Layer App ID from the Layer developer dashboard.  The scanner can be bypassed by supplying your Atlas demo App ID in the `App.LAYER_APP_ID` constant.
 2. **herokuprovider:** For use with the deployable [Rails Provider](https://github.com/layerhq/layer-identity-provider) backend.  Your Layer App ID must be set in the `App.LAYER_APP_ID` constant.
 
 In Android Studio, switch flavors using Build Variants, typically in the side tab on the lower left of the Android Studio window.
