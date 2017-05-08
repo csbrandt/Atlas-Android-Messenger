@@ -11,8 +11,8 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.app.NotificationCompat;
 
-import com.layer.atlas.util.Util;
 import com.layer.messenger.util.Log;
+import com.layer.messenger.util.Util;
 import com.layer.sdk.LayerClient;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.Message;
@@ -52,7 +52,7 @@ public class PushNotificationReceiver extends BroadcastReceiver {
         Bundle extras = intent.getExtras();
         if (extras == null) return;
 
-        final PushNotificationPayload payload = PushNotificationPayload.fromGcmIntentExtras(extras);
+        final PushNotificationPayload payload = PushNotificationPayload.fromLayerPushExtras(extras);
         final Uri conversationId = extras.getParcelable(LAYER_CONVERSATION_KEY);
         final Uri messageId = extras.getParcelable(LAYER_MESSAGE_KEY);
 
@@ -274,7 +274,7 @@ public class PushNotificationReceiver extends BroadcastReceiver {
             Collections.sort(positions);
 
             // Construct notification
-            String conversationTitle = Util.getConversationTitle(App.getLayerClient(), App.getParticipantProvider(), conversation);
+            String conversationTitle = Util.getConversationTitle(App.getLayerClient(), conversation);
             NotificationCompat.InboxStyle inboxStyle = new NotificationCompat.InboxStyle().setBigContentTitle(conversationTitle);
             int i;
             if (positions.size() <= MAX_MESSAGES) {

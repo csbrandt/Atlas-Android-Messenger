@@ -28,14 +28,20 @@ import com.layer.atlas.messagetypes.threepartimage.CameraSender;
 import com.layer.atlas.messagetypes.threepartimage.GallerySender;
 import com.layer.atlas.messagetypes.threepartimage.ThreePartImageCellFactory;
 import com.layer.atlas.typingindicators.BubbleTypingIndicatorFactory;
-import com.layer.atlas.util.Util;
 import com.layer.atlas.util.views.SwipeableItem;
+import com.layer.messenger.util.Util;
 import com.layer.sdk.LayerClient;
+import com.layer.sdk.changes.LayerChange;
+import com.layer.sdk.changes.LayerChangeEvent;
 import com.layer.sdk.exceptions.LayerConversationException;
+import com.layer.sdk.listeners.LayerChangeEventListener;
 import com.layer.sdk.messaging.Conversation;
 import com.layer.sdk.messaging.ConversationOptions;
+import com.layer.sdk.messaging.Identity;
+import com.layer.sdk.messaging.LayerObject;
 import com.layer.sdk.messaging.Message;
 
+import java.util.HashSet;
 import java.util.List;
 
 public class MessagesListActivity extends BaseActivity {
@@ -47,6 +53,7 @@ public class MessagesListActivity extends BaseActivity {
     private AtlasMessagesRecyclerView mMessagesList;
     private AtlasTypingIndicator mTypingIndicator;
     private AtlasMessageComposer mMessageComposer;
+    private IdentityChangeListener mIdentityChangeListener;
 
     public MessagesListActivity() {
         super(R.layout.activity_messages_list, R.menu.menu_messages_list, R.string.title_select_conversation, true);
@@ -95,7 +102,7 @@ public class MessagesListActivity extends BaseActivity {
         }
 
         mAddressBar = ((AtlasAddressBar) findViewById(R.id.conversation_launcher))
-                .init(getLayerClient(), getParticipantProvider(), getPicasso())
+                .init(getLayerClient(), getPicasso())
                 .setOnConversationClickListener(new AtlasAddressBar.OnConversationClickListener() {
                     @Override
                     public void onConversationClick(AtlasAddressBar addressBar, Conversation conversation) {
@@ -105,13 +112,13 @@ public class MessagesListActivity extends BaseActivity {
                 })
                 .setOnParticipantSelectionChangeListener(new AtlasAddressBar.OnParticipantSelectionChangeListener() {
                     @Override
-                    public void onParticipantSelectionChanged(AtlasAddressBar addressBar, final List<String> participantIds) {
-                        if (participantIds.isEmpty()) {
+                    public void onParticipantSelectionChanged(AtlasAddressBar addressBar, final List<Identity> participants) {
+                        if (participants.isEmpty()) {
                             setConversation(null, false);
                             return;
                         }
                         try {
-                            setConversation(getLayerClient().newConversation(new ConversationOptions().distinct(true), participantIds), false);
+                            setConversation(getLayerClient().newConversation(new ConversationOptions().distinct(true), new HashSet<>(participants)), false);
                         } catch (LayerConversationException e) {
                             setConversation(e.getConversation(), false);
                         }
@@ -152,7 +159,7 @@ public class MessagesListActivity extends BaseActivity {
                 .setHistoricMessagesPerFetch(20);
 
         mMessagesList = ((AtlasMessagesRecyclerView) findViewById(R.id.messages_list))
-                .init(getLayerClient(), getParticipantProvider(), getPicasso())
+                .init(getLayerClient(), getPicasso())
                 .addCellFactories(
                         new TextCellFactory(),
                         new ThreePartImageCellFactory(this, getLayerClient(), getPicasso()),
@@ -162,7 +169,7 @@ public class MessagesListActivity extends BaseActivity {
                 .setOnMessageSwipeListener(new SwipeableItem.OnSwipeListener<Message>() {
                     @Override
                     public void onSwipe(final Message message, int direction) {
-                        new AlertDialog.Builder(MessagesListActivity.this)
+                        AlertDialog.Builder builder = new AlertDialog.Builder(MessagesListActivity.this)
                                 .setMessage(R.string.alert_message_delete_message)
                                 .setNegativeButton(R.string.alert_button_cancel, new DialogInterface.OnClickListener() {
                                     @Override
@@ -172,19 +179,23 @@ public class MessagesListActivity extends BaseActivity {
                                         dialog.dismiss();
                                     }
                                 })
-                                .setNeutralButton(R.string.alert_button_delete_my_devices, new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        message.delete(LayerClient.DeletionMode.ALL_MY_DEVICES);
-                                    }
-                                })
+
                                 .setPositiveButton(R.string.alert_button_delete_all_participants, new DialogInterface.OnClickListener() {
                                     @Override
                                     public void onClick(DialogInterface dialog, int which) {
                                         message.delete(LayerClient.DeletionMode.ALL_PARTICIPANTS);
                                     }
-                                })
-                                .show();
+                                });
+                        // User delete is only available if read receipts are enabled
+                        if (message.getConversation().isReadReceiptsEnabled()) {
+                            builder.setNeutralButton(R.string.alert_button_delete_my_devices, new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    message.delete(LayerClient.DeletionMode.ALL_MY_DEVICES);
+                                }
+                            });
+                        }
+                        builder.show();
                     }
                 });
 
@@ -199,10 +210,12 @@ public class MessagesListActivity extends BaseActivity {
                 });
 
         mMessageComposer = ((AtlasMessageComposer) findViewById(R.id.message_composer))
-                .init(getLayerClient(), getParticipantProvider())
+                .init(getLayerClient())
                 .setTextSender(new TextSender())
                 .addAttachmentSenders(
-                        new CameraSender(R.string.attachment_menu_camera, R.drawable.ic_photo_camera_white_24dp, this),
+                        new CameraSender(R.string.attachment_menu_camera,
+                                R.drawable.ic_photo_camera_white_24dp, this,
+                                getApplicationContext().getPackageName() + ".file_provider"),
                         new GallerySender(R.string.attachment_menu_gallery, R.drawable.ic_photo_white_24dp, this),
                         new LocationSender(R.string.attachment_menu_location, R.drawable.ic_place_white_24dp, this))
                 .setOnMessageEditTextFocusChangeListener(new View.OnFocusChangeListener() {
@@ -225,7 +238,7 @@ public class MessagesListActivity extends BaseActivity {
             } else if (intent.hasExtra("participantIds")) {
                 String[] participantIds = intent.getStringArrayExtra("participantIds");
                 try {
-                    conversation = getLayerClient().newConversation(new ConversationOptions().distinct(true), participantIds);
+                    conversation = getLayerClient().newConversationWithUserIds(new ConversationOptions().distinct(true), participantIds);
                 } catch (LayerConversationException e) {
                     conversation = e.getConversation();
                 }
@@ -240,20 +253,32 @@ public class MessagesListActivity extends BaseActivity {
         PushNotificationReceiver.getNotifications(this).clear(mConversation);
         super.onResume();
         setTitle(mConversation != null);
+
+        // Register for identity changes and update the activity's title as needed
+        mIdentityChangeListener = new IdentityChangeListener();
+        getLayerClient().registerEventListener(mIdentityChangeListener);
     }
 
     @Override
     protected void onPause() {
         // Update the notification position to the latest seen
         PushNotificationReceiver.getNotifications(this).clear(mConversation);
+
+        getLayerClient().unregisterEventListener(mIdentityChangeListener);
         super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        mMessagesList.onDestroy();
     }
 
     public void setTitle(boolean useConversation) {
         if (!useConversation) {
             setTitle(R.string.title_select_conversation);
         } else {
-            setTitle(Util.getConversationTitle(getLayerClient(), getParticipantProvider(), mConversation));
+            setTitle(Util.getConversationTitle(getLayerClient(), mConversation));
         }
     }
 
@@ -317,5 +342,24 @@ public class MessagesListActivity extends BaseActivity {
         ADDRESS_COMPOSER,
         ADDRESS_CONVERSATION_COMPOSER,
         CONVERSATION_COMPOSER
+    }
+
+    private class IdentityChangeListener implements LayerChangeEventListener.Weak {
+        @Override
+        public void onChangeEvent(LayerChangeEvent layerChangeEvent) {
+            // Don't need to update title if there is no conversation
+            if (mConversation == null) {
+                return;
+            }
+
+            for (LayerChange change : layerChangeEvent.getChanges()) {
+                if (change.getObjectType().equals(LayerObject.Type.IDENTITY)) {
+                    Identity identity = (Identity) change.getObject();
+                    if (mConversation.getParticipants().contains(identity)) {
+                        setTitle(true);
+                    }
+                }
+            }
+        }
     }
 }

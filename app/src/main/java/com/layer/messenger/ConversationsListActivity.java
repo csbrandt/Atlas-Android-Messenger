@@ -9,12 +9,19 @@ import android.view.View;
 
 import com.layer.atlas.AtlasConversationsRecyclerView;
 import com.layer.atlas.adapters.AtlasConversationsAdapter;
+import com.layer.atlas.messagetypes.location.LocationCellFactory;
+import com.layer.atlas.messagetypes.singlepartimage.SinglePartImageCellFactory;
+import com.layer.atlas.messagetypes.text.TextCellFactory;
+import com.layer.atlas.messagetypes.threepartimage.ThreePartImageCellFactory;
 import com.layer.atlas.util.views.SwipeableItem;
 import com.layer.messenger.util.Log;
 import com.layer.sdk.LayerClient;
 import com.layer.sdk.messaging.Conversation;
 
 public class ConversationsListActivity extends BaseActivity {
+
+    private AtlasConversationsRecyclerView mConversationsList;
+
     public ConversationsListActivity() {
         super(R.layout.activity_conversations_list, R.menu.menu_conversations_list, R.string.title_conversations_list, false);
     }
@@ -27,10 +34,10 @@ public class ConversationsListActivity extends BaseActivity {
             return;
         }
 
-        final AtlasConversationsRecyclerView conversationsList = (AtlasConversationsRecyclerView) findViewById(R.id.conversations_list);
+        mConversationsList = (AtlasConversationsRecyclerView) findViewById(R.id.conversations_list);
 
         // Atlas methods
-        conversationsList.init(getLayerClient(), getParticipantProvider(), getPicasso())
+        mConversationsList.init(getLayerClient(), getPicasso())
                 .setInitialHistoricMessagesToFetch(20)
                 .setOnConversationClickListener(new AtlasConversationsAdapter.OnConversationClickListener() {
                     @Override
@@ -48,23 +55,21 @@ public class ConversationsListActivity extends BaseActivity {
                         return false;
                     }
                 })
+                .addCellFactories(new TextCellFactory(),
+                        new ThreePartImageCellFactory(getLayerClient(), getPicasso()),
+                        new SinglePartImageCellFactory(getLayerClient(), getPicasso()),
+                        new LocationCellFactory(getPicasso()))
                 .setOnConversationSwipeListener(new SwipeableItem.OnSwipeListener<Conversation>() {
                     @Override
                     public void onSwipe(final Conversation conversation, int direction) {
-                        new AlertDialog.Builder(ConversationsListActivity.this)
+                        AlertDialog.Builder builder = new AlertDialog.Builder(ConversationsListActivity.this)
                                 .setMessage(R.string.alert_message_delete_conversation)
                                 .setNegativeButton(R.string.alert_button_cancel, new DialogInterface.OnClickListener() {
                                     @Override
                                     public void onClick(DialogInterface dialog, int which) {
                                         // TODO: simply update this one conversation
-                                        conversationsList.getAdapter().notifyDataSetChanged();
+                                        mConversationsList.getAdapter().notifyDataSetChanged();
                                         dialog.dismiss();
-                                    }
-                                })
-                                .setNeutralButton(R.string.alert_button_delete_my_devices, new DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface dialog, int which) {
-                                        conversation.delete(LayerClient.DeletionMode.ALL_MY_DEVICES);
                                     }
                                 })
                                 .setPositiveButton(R.string.alert_button_delete_all_participants, new DialogInterface.OnClickListener() {
@@ -72,8 +77,17 @@ public class ConversationsListActivity extends BaseActivity {
                                     public void onClick(DialogInterface dialog, int which) {
                                         conversation.delete(LayerClient.DeletionMode.ALL_PARTICIPANTS);
                                     }
-                                })
-                                .show();
+                                });
+                        // User delete is only available if read receipts are enabled
+                        if (conversation.isReadReceiptsEnabled()) {
+                            builder.setNeutralButton(R.string.alert_button_delete_my_devices, new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    conversation.delete(LayerClient.DeletionMode.ALL_MY_DEVICES);
+                                }
+                            });
+                        }
+                        builder.show();
                     }
                 });
 
@@ -83,6 +97,14 @@ public class ConversationsListActivity extends BaseActivity {
                         startActivity(new Intent(ConversationsListActivity.this, MessagesListActivity.class));
                     }
                 });
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (mConversationsList != null) {
+            mConversationsList.onDestroy();
+        }
     }
 
     @Override

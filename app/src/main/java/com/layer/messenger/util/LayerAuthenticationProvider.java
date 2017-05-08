@@ -1,4 +1,4 @@
-package com.layer.messenger.flavor;
+package com.layer.messenger.util;
 
 import android.app.Activity;
 import android.content.Context;
@@ -7,10 +7,8 @@ import android.content.SharedPreferences;
 import android.widget.Toast;
 
 import com.layer.messenger.R;
+import com.layer.messenger.LoginActivity;
 import com.layer.messenger.ResumeActivity;
-import com.layer.messenger.flavor.util.CustomEndpoint;
-import com.layer.messenger.util.AuthenticationProvider;
-import com.layer.messenger.util.Log;
 import com.layer.sdk.LayerClient;
 import com.layer.sdk.exceptions.LayerException;
 
@@ -24,13 +22,13 @@ import java.net.URL;
 
 import static com.layer.messenger.util.Util.streamToString;
 
-public class RailsAuthenticationProvider implements AuthenticationProvider<RailsAuthenticationProvider.Credentials> {
-    private static final String TAG = RailsAuthenticationProvider.class.getSimpleName();
+public class LayerAuthenticationProvider implements AuthenticationProvider<LayerAuthenticationProvider.Credentials> {
+    private static final String TAG = LayerAuthenticationProvider.class.getSimpleName();
 
     private final SharedPreferences mPreferences;
     private Callback mCallback;
 
-    public RailsAuthenticationProvider(Context context) {
+    public LayerAuthenticationProvider(Context context) {
         mPreferences = context.getSharedPreferences(TAG, Context.MODE_PRIVATE);
     }
 
@@ -99,14 +97,14 @@ public class RailsAuthenticationProvider implements AuthenticationProvider<Rails
             Intent intent = new Intent(from, ResumeActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
             intent.putExtra(ResumeActivity.EXTRA_LOGGED_IN_ACTIVITY_CLASS_NAME, from.getClass().getName());
-            intent.putExtra(ResumeActivity.EXTRA_LOGGED_OUT_ACTIVITY_CLASS_NAME, RailsLoginActivity.class.getName());
+            intent.putExtra(ResumeActivity.EXTRA_LOGGED_OUT_ACTIVITY_CLASS_NAME, LoginActivity.class.getName());
             from.startActivity(intent);
             return true;
         }
 
         // We have a Layer App ID but no cached provider credentials: routing to Login required.
         if (Log.isLoggable(Log.VERBOSE)) Log.v("Routing to login Activity");
-        Intent intent = new Intent(from, RailsLoginActivity.class);
+        Intent intent = new Intent(from, LoginActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
         from.startActivity(intent);
         return true;
@@ -145,7 +143,7 @@ public class RailsAuthenticationProvider implements AuthenticationProvider<Rails
 
         try {
             // Post request
-            String url = "http://layer-identity-provider.herokuapp.com/users/sign_in.json";
+            String url = CustomEndpoint.getEndpoint().getProviderUrl();
             HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
             connection.setDoInput(true);
             connection.setDoOutput(true);

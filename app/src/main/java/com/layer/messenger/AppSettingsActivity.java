@@ -5,17 +5,24 @@ import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.os.Build;
 import android.os.Bundle;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.Loader;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.layer.atlas.AtlasAvatar;
-import com.layer.atlas.provider.Participant;
 import com.layer.atlas.util.Util;
+import com.layer.messenger.util.ConversationSettingsTaskLoader;
+import com.layer.messenger.util.ConversationSettingsTaskLoader.Results;
+
 import com.layer.messenger.util.Log;
 import com.layer.sdk.LayerClient;
 import com.layer.sdk.changes.LayerChangeEvent;
@@ -23,16 +30,21 @@ import com.layer.sdk.exceptions.LayerException;
 import com.layer.sdk.listeners.LayerAuthenticationListener;
 import com.layer.sdk.listeners.LayerChangeEventListener;
 import com.layer.sdk.listeners.LayerConnectionListener;
-import com.layer.sdk.messaging.Conversation;
+import com.layer.sdk.messaging.Identity;
+import com.layer.sdk.messaging.Presence;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public class AppSettingsActivity extends BaseActivity implements LayerConnectionListener, LayerAuthenticationListener, LayerChangeEventListener, View.OnLongClickListener {
+
+public class AppSettingsActivity extends BaseActivity implements LayerConnectionListener, LayerAuthenticationListener, LayerChangeEventListener, View.OnLongClickListener, AdapterView.OnItemSelectedListener,  LoaderManager.LoaderCallbacks<Results> {
     /* Account */
     private AtlasAvatar mAvatar;
     private TextView mUserName;
     private TextView mUserState;
     private Button mLogoutButton;
+    private Spinner mPresenceSpinner;
+    private ArrayAdapter<String> mPresenceSpinnerDataAdapter;
 
     /* Notifications */
     private Switch mShowNotifications;
@@ -68,6 +80,7 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
         mUserName = (TextView) findViewById(R.id.user_name);
         mUserState = (TextView) findViewById(R.id.user_state);
         mLogoutButton = (Button) findViewById(R.id.logout_button);
+        mPresenceSpinner = (Spinner) findViewById(R.id.presence_spinner);
         mShowNotifications = (Switch) findViewById(R.id.show_notifications_switch);
         mVerboseLogging = (Switch) findViewById(R.id.logging_switch);
         mAppVersion = (TextView) findViewById(R.id.app_version);
@@ -81,7 +94,11 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
         mDiskUtilization = (TextView) findViewById(R.id.disk_utilization);
         mDiskAllowance = (TextView) findViewById(R.id.disk_allowance);
         mAutoDownloadMimeTypes = (TextView) findViewById(R.id.auto_download_mime_types);
-        mAvatar.init(getParticipantProvider(), getPicasso());
+
+
+        mAvatar.init(getPicasso());
+
+        getSupportLoaderManager().initLoader(R.id.setting_loader_id, null, this);
 
         // Long-click copy-to-clipboard
         mUserName.setOnLongClickListener(this);
@@ -109,6 +126,10 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
                         .setPositiveButton(R.string.alert_button_logout, new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialog, int which) {
+                                if (Log.isPerfLoggable()) {
+                                    Log.perf("Deauthenticate button clicked");
+                                }
+
                                 if (Log.isLoggable(Log.VERBOSE)) {
                                     Log.v("Deauthenticating");
                                 }
@@ -120,6 +141,10 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
                                 App.deauthenticate(new Util.DeauthenticationCallback() {
                                     @Override
                                     public void onDeauthenticationSuccess(LayerClient client) {
+                                        if (Log.isPerfLoggable()) {
+                                            Log.perf("Received callback for successful deauthentication");
+                                        }
+
                                         if (Log.isLoggable(Log.VERBOSE)) {
                                             Log.v("Successfully deauthenticated");
                                         }
@@ -151,6 +176,19 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
             }
         });
 
+        // Setup Presence Spinner
+        mPresenceSpinner.setOnItemSelectedListener(this);
+        List<String> presenceStates = new ArrayList<>();
+        for (Presence.PresenceStatus status : Presence.PresenceStatus.values()) {
+            if (status.isUserSettable()) {
+                presenceStates.add(status.toString());
+            }
+        }
+        mPresenceSpinnerDataAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, presenceStates);
+        mPresenceSpinnerDataAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        mPresenceSpinner.setAdapter(mPresenceSpinnerDataAdapter);
+
+
         mShowNotifications.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
@@ -167,6 +205,19 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
             }
         });
     }
+
+    @Override
+    public Loader<Results> onCreateLoader(int id, Bundle args) {
+        return new ConversationSettingsTaskLoader(getApplicationContext());
+    }
+
+    @Override
+    public void onLoadFinished(Loader<Results> loader, Results data) {
+        setUpConversationCount(data);
+    }
+
+    @Override
+    public void onLoaderReset(Loader<Results> loader) {}
 
     @Override
     protected void onResume() {
@@ -202,10 +253,19 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
         if (!getLayerClient().isAuthenticated()) return;
 
         /* Account */
-        Participant participant = getParticipantProvider().getParticipant(getLayerClient().getAuthenticatedUserId());
-        mAvatar.setParticipants(getLayerClient().getAuthenticatedUserId());
-        mUserName.setText(participant.getName());
+        Identity currentUser = getLayerClient().getAuthenticatedUser();
+        mAvatar.setParticipants(currentUser);
+        if (currentUser != null) {
+            mUserName.setText(Util.getDisplayName(currentUser));
+        } else {
+            mUserName.setText(null);
+        }
         mUserState.setText(getLayerClient().isConnected() ? R.string.settings_content_connected : R.string.settings_content_disconnected);
+        Presence.PresenceStatus currentStatus = getLayerClient().getPresenceStatus();
+        if (currentStatus != null) {
+            int spinnerPosition = mPresenceSpinnerDataAdapter.getPosition(currentStatus.toString());
+            mPresenceSpinner.setSelection(spinnerPosition);
+        }
 
         /* Notifications */
         mShowNotifications.setChecked(PushNotificationReceiver.getNotifications(this).isEnabled());
@@ -219,19 +279,12 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
         mAtlasVersion.setText(Util.getVersion());
         mLayerVersion.setText(LayerClient.getVersion());
         mAndroidVersion.setText(getString(R.string.settings_content_android_version, Build.VERSION.RELEASE, Build.VERSION.SDK_INT));
-        mUserId.setText(getLayerClient().getAuthenticatedUserId());
-        
-        /* Statistics */
-        long totalMessages = 0;
-        long totalUnread = 0;
-        List<Conversation> conversations = getLayerClient().getConversations();
-        for (Conversation conversation : conversations) {
-            totalMessages += conversation.getTotalMessageCount();
-            totalUnread += conversation.getTotalUnreadMessageCount();
+
+        if (currentUser != null) {
+            mUserId.setText(currentUser.getUserId());
+        } else {
+            mUserId.setText(R.string.settings_not_authenticated);
         }
-        mConversationCount.setText(String.format("%d", conversations.size()));
-        mMessageCount.setText(String.format("%d", totalMessages));
-        mUnreadMessageCount.setText(String.format("%d", totalUnread));
 
         /* Rich Content */
         mDiskUtilization.setText(readableByteFormat(getLayerClient().getDiskUtilization()));
@@ -242,6 +295,13 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
             mDiskAllowance.setText(readableByteFormat(allowance));
         }
         mAutoDownloadMimeTypes.setText(TextUtils.join("\n", getLayerClient().getAutoDownloadMimeTypes()));
+    }
+
+    private void setUpConversationCount(Results results) {
+
+        mConversationCount.setText(String.format("%d", results.getConversationCount()));
+        mMessageCount.setText(String.format("%d", results.getTotalMessages()));
+        mUnreadMessageCount.setText(String.format("%d", results.getTotalUnreadMessages()));
     }
 
     private String readableByteFormat(long bytes) {
@@ -316,5 +376,24 @@ public class AppSettingsActivity extends BaseActivity implements LayerConnection
             return true;
         }
         return false;
+    }
+
+    @Override
+    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+        if (!getLayerClient().isAuthenticated()) return;
+
+        String newSelection = mPresenceSpinnerDataAdapter.getItem(position).toString();
+        Presence.PresenceStatus newStatus = Presence.PresenceStatus.valueOf(newSelection);
+        if (getLayerClient().isAuthenticated()) {
+            getLayerClient().setPresenceStatus(newStatus);
+        }
+
+        // Local changes don't raise change notifications. So, refresh manually
+        mAvatar.invalidate();
+    }
+
+    @Override
+    public void onNothingSelected(AdapterView<?> parent) {
+
     }
 }
